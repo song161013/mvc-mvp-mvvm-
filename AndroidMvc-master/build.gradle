@@ -1,0 +1,131 @@
+/*
+ * Copyright 2016 Kejun Xia
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+apply plugin: 'com.github.kt3k.coveralls'
+apply plugin: 'jacoco'
+
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+def log4jVersion = '1.7.6'
+def logbackAndroidVersion = '1.1.1-5'
+
+buildscript {
+    repositories {
+        jcenter()
+        mavenLocal()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:2.2.3'
+        classpath 'com.neenbedankt.gradle.plugins:android-apt:1.8'
+        classpath 'com.github.dcendents:android-maven-gradle-plugin:1.4.1'
+
+        classpath 'org.kt3k.gradle.plugin:coveralls-gradle-plugin:2.0.1'
+    }
+}
+
+// Only report code coverage for projects that are distrubuted
+def jacocoCoveredProjects = [
+        project(":library:poke"),
+        project(":library:android-mvc-core")
+]
+
+allprojects {
+    tasks.withType(JavaCompile) {
+        sourceCompatibility = 1.7
+        targetCompatibility = 1.7
+    }
+
+    repositories {
+        jcenter()
+        mavenLocal()
+    }
+
+    if (jacocoCoveredProjects.contains(project)) {
+        apply plugin: 'java'
+        apply plugin: 'jacoco'
+    }
+}
+
+if (JavaVersion.current().isJava8Compatible()) {
+    allprojects {
+        tasks.withType(Javadoc) {
+            options.addStringOption('Xdoclint:none', '-quiet')
+        }
+    }
+}
+
+ext {
+    siteUrl = 'https://github.com/kejunxia/AndroidMvc'      // Homepage URL of the library
+    gitUrl = 'https://github.com/kejunxia/AndroidMvc.git'   // Git repository URL
+    version = [
+        major: 3,
+        minor: 3,
+        patch : 0
+    ]
+    libGroup = 'com.shipdream'
+    libVersion = "${version.major}.${version.minor}.${version.patch}"
+    shouldPublish = false
+
+    androidMinSdkVersion = 14
+    androidCompileSdkVersion = 25
+    androidBuildToolVersion = "25.0.2"
+    supportLibVersion = "25.1.0"
+    androidTargetSdkVersion = androidCompileSdkVersion
+    lib = [
+            intelljAnnoatations: 'com.intellij:annotations:12.0',
+            androidMinSdk: 'com.google.android:android:4.0.1.2',
+            junit: 'junit:junit:4.12',
+            mokito: 'org.mockito:mockito-core:1.9.5',
+            slf4jApi: "org.slf4j:slf4j-api:$log4jVersion",
+            slf4jLog: "org.slf4j:slf4j-log4j12:$log4jVersion",
+            logbackAndroidCore: "com.github.tony19:logback-android-core:$logbackAndroidVersion",
+            logbackAndroidClassic: "com.github.tony19:logback-android-classic:$logbackAndroidVersion",
+            robolectric: "org.robolectric:robolectric:3.0"
+    ]
+}
+
+task jacocoRootReport(type: JacocoReport, group: 'Coverage reports') {
+    description = 'Generates an aggregate report from all subprojects'
+    dependsOn(jacocoCoveredProjects.test)
+
+    additionalSourceDirs = files(jacocoCoveredProjects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories = files(jacocoCoveredProjects.sourceSets.main.allSource.srcDirs)
+    classDirectories = files(jacocoCoveredProjects.sourceSets.main.output)
+    executionData = files(jacocoCoveredProjects.jacocoTestReport.executionData)
+
+    reports {
+        html.enabled = true
+        xml.enabled = true
+    }
+
+    doFirst {
+        executionData = files(executionData.findAll { it.exists() })
+    }
+}
+
+coveralls {
+    sourceDirs = jacocoCoveredProjects.sourceSets.main.allSource.srcDirs.flatten()
+    jacocoReportPath = "${buildDir}/reports/jacoco/jacocoRootReport/jacocoRootReport.xml"
+}
+
+tasks.coveralls {
+    group = 'Coverage reports'
+    description = 'Uploads the aggregated coverage report to Coveralls'
+
+    dependsOn jacocoRootReport
+    onlyIf { System.env.'CI' }
+}
